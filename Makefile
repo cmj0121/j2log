@@ -1,3 +1,4 @@
+SRC := $(wildcard *.go)
 BIN := $(subst cmd/,,$(wildcard cmd/*))
 
 .PHONY: all clean test run build install upgrade help
@@ -32,5 +33,5 @@ help:				# show this message
 	@perl -nle 'print $$& if m{^[\w-]+:.*?#.*$$}' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?#"} {printf "    %-18s %s\n", $$1, $$2}'
 
-%: cmd/%/main.go
+%: cmd/%/main.go $(SRC)
 	go build -ldflags "-w -s" -o $@ $<
