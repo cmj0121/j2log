@@ -2,6 +2,8 @@ package j2log
 
 import (
 	"bufio"
+	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 
@@ -14,6 +16,7 @@ import (
 type J2Log struct {
 	File *os.File `arg:"" default:"-" help:"The file to parse."`
 
+	// the logger options
 	Quiet   bool `short:"q" group:"logger" xor:"verbose,quiet" help:"Disable all logger."`
 	Verbose int  `short:"v" group:"logger" xor:"verbose,quiet" type:"counter" help:"Show the verbose logger."`
 }
@@ -53,12 +56,34 @@ func (cli *J2Log) Run() int {
 func (cli *J2Log) run() (err error) {
 	defer cli.File.Close()
 
+	tmpl := DefaultTmpl()
+
 	scanner := bufio.NewScanner(cli.File)
 	for scanner.Scan() {
 		line := strings.Trim(scanner.Text(), " \t")
 		log.Debug().Str("line", line).Msg("read line ...")
+
+		switch encoded_line, ok := cli.trans(line, tmpl); ok {
+		case true:
+			fmt.Println(encoded_line)
+		case false:
+			log.Warn().Str("line", line).Msg("cannot translate line")
+		}
 	}
 
+	return
+}
+
+// convert encoded JSON data to human-readable log
+func (cli *J2Log) trans(raw string, tmpl *Template) (line string, ok bool) {
+	var data map[string]interface{}
+
+	if err := json.Unmarshal([]byte(raw), &data); err != nil {
+		log.Debug().Err(err).Msg("failed to unmarshal from JSON")
+		return
+	}
+
+	line, ok = tmpl.Extract(data)
 	return
 }
 
