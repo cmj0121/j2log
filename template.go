@@ -1,10 +1,22 @@
 package j2log
 
 import (
-	"fmt"
+	"bytes"
+	"strings"
+	"text/template"
+	"time"
 
 	"github.com/rs/zerolog/log"
 )
+
+// the extracted log
+type Log struct {
+	Timestamp time.Time
+	Message   string
+
+	// the rest of the log
+	Rest map[string]interface{}
+}
 
 // the template of the final human readable log.
 type Template struct {
@@ -22,6 +34,28 @@ func DefaultTmpl() *Template {
 
 // convert the JSON log to human-readable log
 func (t Template) Extract(raw map[string]interface{}) (line string, ok bool) {
+	var extracted Log
+
+	if extracted, ok = t.extractLog(raw); !ok {
+		log.Info().Msg("failed to extract log")
+		return
+	}
+
+	// construct the human-readable log
+	var buff bytes.Buffer
+
+	tmpl := template.Must(template.New("log").Parse(`[{{- .Timestamp.Format "2006-01-02T15:04:05-0700" -}}] {{ .Message -}}`))
+	if err := tmpl.Execute(&buff, extracted); err != nil {
+		log.Debug().Err(err).Msg("failed to execute template")
+		return
+	}
+
+	line = buff.String()
+	ok = true
+	return
+}
+
+func (t Template) extractLog(raw map[string]interface{}) (extracted Log, ok bool) {
 	var timestamp, message string
 
 	if timestamp, ok = t.extract(raw, t.Timestamp); !ok {
@@ -35,8 +69,28 @@ func (t Template) Extract(raw map[string]interface{}) (line string, ok bool) {
 	}
 
 	// construct the human-readable log
-	line = fmt.Sprintf("%s %s", timestamp, message)
-	ok = true
+	var layout string
+	switch {
+		case strings.HasSuffix(timestamp, "Z"):
+			layout = "2006-01-02T15:04:05.999Z"
+		default:
+			layout = "2006-01-02T15:04:05.999-0700"
+	}
+
+	tz, err := time.Parse(layout, timestamp)
+	if err != nil {
+		log.Debug().Err(err).Msg("failed to parse timestamp")
+		return
+	}
+
+	delete(raw, t.Timestamp)
+	delete(raw, t.Message)
+
+	extracted = Log{
+		Timestamp: tz,
+		Message:   message,
+		Rest:      raw,
+	}
 	return
 }
 
