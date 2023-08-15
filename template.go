@@ -2,6 +2,7 @@ package j2log
 
 import (
 	"bytes"
+	"strings"
 	"text/template"
 	"time"
 
@@ -68,7 +69,14 @@ func (t Template) extractLog(raw map[string]interface{}) (extracted Log, ok bool
 	}
 
 	// construct the human-readable log
-	layout := "2006-01-02T15:04:05.999-0700"
+	var layout string
+	switch {
+		case strings.HasSuffix(timestamp, "Z"):
+			layout = "2006-01-02T15:04:05.999Z"
+		default:
+			layout = "2006-01-02T15:04:05.999-0700"
+	}
+
 	tz, err := time.Parse(layout, timestamp)
 	if err != nil {
 		log.Debug().Err(err).Msg("failed to parse timestamp")
