@@ -13,6 +13,15 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	PROJ_NAME = "j2log"
+	PROJ_DESC = "A tool to convert JSON log to human-readable log."
+
+	MAJOR = 0
+	MINOR = 1
+	MACRO = 0
+)
+
 var (
 	// the docker-compose log format
 	RE_JSON_WITH_NAME = regexp.MustCompile(`^([a-zA-Z0-9_]+)\s*\|\s*(\{.*\})$`)
@@ -21,6 +30,9 @@ var (
 // the main struct for the application, hold the command-line options.
 type J2Log struct {
 	File *os.File `arg:"" default:"-" help:"The file to parse."`
+
+	// show version and exit
+	Version kong.VersionFlag `short:"V" name:"version" help:"Print version info and quit"`
 
 	// the logger options
 	Quiet   bool `short:"q" group:"logger" xor:"verbose,quiet" help:"Disable all logger."`
@@ -35,7 +47,15 @@ func New() *J2Log {
 // the main function, called from main.go, parses the command-line options and
 // calls the appropriate function.
 func (cli *J2Log) ParseAndRun() {
-	kong.Parse(cli)
+	kong.Parse(
+		cli,
+		kong.Name(PROJ_NAME),
+		kong.Description(PROJ_DESC),
+		kong.Vars{
+			"version": fmt.Sprintf("%v (v%d.%d.%d)", PROJ_NAME, MAJOR, MINOR, MACRO),
+		},
+	)
+
 	cli.RunAndExit()
 }
 
