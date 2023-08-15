@@ -1,6 +1,7 @@
 package j2log
 
 import (
+	"regexp"
 	"bufio"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,11 @@ import (
 	"github.com/alecthomas/kong"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+)
+
+var (
+	// the docker-compose log format
+	RE_JSON_WITH_NAME = regexp.MustCompile(`^([a-zA-Z0-9_]+)\s*\|\s*(\{.*\})$`)
 )
 
 // the main struct for the application, hold the command-line options.
@@ -76,14 +82,32 @@ func (cli *J2Log) run() (err error) {
 
 // convert encoded JSON data to human-readable log
 func (cli *J2Log) trans(raw string, tmpl *Template) (line string, ok bool) {
-	var data map[string]interface{}
-
-	if err := json.Unmarshal([]byte(raw), &data); err != nil {
+	switch data, err := cli.unmarchal(raw); err {
+	case nil:
+		line, ok = tmpl.Extract(data)
+	default:
 		log.Debug().Err(err).Msg("failed to unmarshal from JSON")
-		return
 	}
 
-	line, ok = tmpl.Extract(data)
+	return
+}
+
+// unmarchal the JSON string to JSON object
+func (cli *J2Log) unmarchal(raw string) (data map[string]interface{}, err error) {
+	if err = json.Unmarshal([]byte(raw), &data); err != nil {
+		// give second chance that the raw string is `NAME | { ... }`
+		if !RE_JSON_WITH_NAME.MatchString(raw) {
+			log.Debug().Err(err).Msg("failed to unmarshal from JSON")
+			return
+		}
+
+		raw = RE_JSON_WITH_NAME.FindStringSubmatch(raw)[2]
+		raw = strings.Trim(raw, " \t")
+
+		log.Debug().Str("raw", raw).Msg("try to unmarshal again ...")
+		data, err = cli.unmarchal(raw)
+	}
+
 	return
 }
 
